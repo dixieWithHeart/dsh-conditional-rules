@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Conditional Rules",
+    "description": "Injects custom text when conditions match: context usage, user keywords, turn count, tool calls, combinable with AND/OR."
+  }
+}

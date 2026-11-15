@@ -1,0 +1,52 @@
+{
+  "name": "dsh-conditional-rules",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "条件规则：在满足条件时把自定义内容注入对话（上下文占用 / 用户关键词 / 回合数 / 工具调用），支持多条件组合与设置页试算。",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "src",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dixieWithHeart/dsh-conditional-rules.git"
+  },
+  "homepage": "https://github.com/dixieWithHeart/dsh-conditional-rules#readme",
+  "author": "dixie_with_heart (https://github.com/dixieWithHeart)",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "inject",
+    "conditional",
+    "context"
+  ]
+}

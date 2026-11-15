@@ -1,0 +1,14 @@
+# dsh-conditional-rules —— 宿主行
+#
+# insert 段由 bundle 自带，装到 profile 后自动生效，不需要手改 profile 的 patch。
+# config 是**启动默认值**：用户在设置页改的值写入 ~/.dsh/dsh-conditional-rules.json，优先级更高。
+- insert:
+    - id: dsh-conditional-rules
+      name: 'dsh-conditional-rules'
+      config:
+        # 总开关。enabled=false 不让插件整体不加载（那会让设置页也打不开），
+        # 只关闭注入这一动作。
+        enabled: true
+        # 规则表。首次安装为空——不预置任何规则，避免与其他插件的提醒重复注入。
+        # 结构见 README「规则格式」。
+        rules: []
