@@ -1,3 +1,5 @@
+/** @typedef {import('./types.js').Rule} Rule */
+
 /**
  * 注入文本的变量渲染。
  *
@@ -79,7 +81,7 @@ export function escapeBody (value) {
  * 每条规则一个 `<conditional-inject rule="名称">` 块：模型据此能分辨来源，
  * 也能归因到具体规则。外层还有框架加的 `<system-reminder>`，两层叠加。
  *
- * @param {Array<object>} matched 命中的规则
+ * @param {Rule[]} matched 命中的规则
  * @param {object} state 会话状态
  * @param {string} toolName 触发工具名（可选）
  * @returns {string} 空串表示本次不注入

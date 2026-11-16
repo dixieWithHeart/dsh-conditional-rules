@@ -1,3 +1,6 @@
+/** @typedef {import('./types.js').Settings} Settings */
+/** @typedef {import('./types.js').Logger} Logger */
+
 /**
  * 工具：cond_inject
  *
@@ -142,12 +145,12 @@ export function defaultScope (ctx) {
 
 /**
  * @param {object} deps
- * @param {() => object} deps.getSettings
+ * @param {() => Settings} deps.getSettings
  * @param {(next: object) => void} deps.setSettings
  * @param {(next: object) => boolean} deps.persist
- * @param {object} deps.log
+ * @param {Logger} deps.log
  */
-export function createToolDefinition ({ getSettings, setSettings, persist, log }) {
+export function createToolDefinition ({ getSettings, setSettings, persist, log: _log }) {
   const execute = async (args, ctx) => {
     const action = args && typeof args.action === 'string' ? args.action : ''
     const current = getSettings()

@@ -1,3 +1,6 @@
+/** @typedef {import('./types.js').Settings} Settings */
+/** @typedef {import('./types.js').Logger} Logger */
+
 /**
  * 设置页用的 HTTP 路由。
  *
@@ -56,11 +59,11 @@ function previewState (input) {
 
 /**
  * @param {object} deps
- * @param {() => object} deps.getSettings
+ * @param {() => Settings} deps.getSettings
  * @param {(next: object) => void} deps.setSettings
  * @param {(next: object) => boolean} deps.persist
  * @param {() => object} deps.sessionSummary 会话缓存摘要
- * @param {object} deps.log
+ * @param {Logger} deps.log
  */
 export function createRoutes ({ getSettings, setSettings, persist, sessionSummary, log }) {
   const summary = typeof sessionSummary === 'function' ? sessionSummary : () => ({ sessions: [] })

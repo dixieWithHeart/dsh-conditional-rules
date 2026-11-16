@@ -47,7 +47,7 @@ export function sanitizeCondition (raw) {
     if (!pattern) return null
     // 先验编译：非法正则直接丢弃，避免每步求值时抛错
     try {
-      // eslint-disable-next-line no-new
+       
       new RegExp(pattern)
     } catch {
       return null

@@ -7,7 +7,15 @@ import { evalCondition } from './conditions.js'
 
 const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 
-/** 作用域是否匹配当前会话。 */
+/** @typedef {import('./types.js').Rule} Rule */
+/** @typedef {import('./types.js').RuleScope} RuleScope */
+
+/**
+ * 作用域是否匹配当前会话。
+ * @param {RuleScope} scope
+ * @param {any} state
+ * @returns {boolean}
+ */
 export function scopeMatches (scope, state) {
   if (!scope || scope.type === 'global') return true
   if (scope.type === 'session') {
@@ -64,8 +72,8 @@ function allowedByHistory (rule, state) {
 
 /**
  * 判断一条规则是否命中。
- * @param {object} rule 已校验规则
- * @param {object} state 会话状态快照
+ * @param {Rule} rule 已校验规则
+ * @param {any} state 会话状态快照
  * @returns {boolean}
  */
 export function ruleMatches (rule, state) {
@@ -75,7 +83,12 @@ export function ruleMatches (rule, state) {
   return conditionsMatch(rule, state)
 }
 
-/** 全部命中的规则（保序）。 */
+/**
+ * 全部命中的规则（保序）。
+ * @param {Rule[]} rules
+ * @param {any} state
+ * @returns {Rule[]}
+ */
 export function matchRules (rules, state) {
   if (!Array.isArray(rules)) return []
   return rules.filter((rule) => ruleMatches(rule, state))

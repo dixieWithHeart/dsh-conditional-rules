@@ -74,6 +74,7 @@ const EVAL = { context: evalContext, keyword: evalKeyword, turn: evalTurn, tool:
  * @param {object} state 会话状态快照
  * @returns {boolean}
  */
+/** @param {import('./types.js').Condition} cond @param {any} state */
 export function evalCondition (cond, state) {
   const fn = cond && EVAL[cond.type]
   return fn ? Boolean(fn(cond, state)) : false
