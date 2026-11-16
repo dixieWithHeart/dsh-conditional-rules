@@ -97,6 +97,12 @@ dsh plugin add dsh-conditional-rules
 
 底部「试算」可以填一组假状态（占用 / 回合 / 用户消息 / 工具名），看到哪些规则会命中、会渲染出什么，不必真的等到条件成立。
 
+**最近注入**：每次命中都记一条（时间、命中的规则名、渲染后的原文，同一步重复求值只累加次数），最多保留 50 条，**只存内存、重启清空**，可手动清空。它记录的是「宿主侧实际发出的注入」，与界面上的「上下文注入」块互补：后者按快照展示，前者按命中逐条留痕。
+
+**统计看板**：规则列表下方是逐条规则的卡片，**按命中次数降序**——卡片上是规则名与累计次数，点开看明细：每次命中的时间、会话、回合（每条规则保留最近 30 次）。
+
+统计**持久化**在 `~/.dsh/dsh-conditional-rules-stats.json`（与设置文件同目录），命中后 2 秒节流合并写盘，**重启不丢**；点「清空统计」会同时清掉文件内容。口径说明：同一规则在同一会话的同一回合只记一次；规则被删除后，它的历史统计仍保留在看板里（按 id 记账，名字用最近一次的副本）。
+
 ## 注入内容长什么样
 
 命中后注入的是这样一段（外面还有框架加的 `<system-reminder>` 包裹）：
@@ -111,6 +117,8 @@ dsh plugin add dsh-conditional-rules
 
 - 规则正文里的 `<conditional-inject` / `</conditional-inject` 会被转义成 `&lt;`，防止内容提前闭合标签、把后文伪装成「非注入」
 - 规则名进属性前转义引号与尖括号
+
+**为什么注入不是每轮都显示**：运行时上下文是「整段快照」比较与发送的——所有插件的 context 条目（工作目录、沙箱策略、本插件等）拼成一段文本，只要任意一条变化，整段就会重新发送一次。所以不能在注入文本里放回合号之类的易变标识来「让界面每轮显示」，那会把宿主的固定条目一起拖着重复。想看每次命中，用设置页底部的「最近注入」。
 
 同时插件会在运行时上下文里注册一段约定（**只在有启用规则时出现**），告诉模型：
 
@@ -164,9 +172,11 @@ dsh plugin add dsh-conditional-rules
 
 | 路由 | 说明 |
 |---|---|
-| `GET /api/dsh-conditional-rules/state` | 规则表 + 各会话摘要 + 命中计数 |
+| `GET /api/dsh-conditional-rules/state` | 规则表 + 各会话摘要 + 命中计数（按会话分组）+ 聚合统计 + 最近注入 + 持久化看板 |
 | `POST /api/dsh-conditional-rules/set` | `{ enabled?, rules? }`，白名单过滤后落盘 |
 | `POST /api/dsh-conditional-rules/preview` | `{ percent, turn, userText, tool, rules? }` → 命中 id 与渲染文本 |
+| `POST /api/dsh-conditional-rules/trace/clear` | 清空「最近注入」记录（只清内存，不动规则） |
+| `POST /api/dsh-conditional-rules/stats/clear` | 清空持久化统计（会写文件） |
 
 ## 配置（cordis.patch.yml）
 
@@ -183,6 +193,8 @@ node tools/test-core.mjs                                   # 条件 / 组合 / �
 node tools/test-integration.mjs                            # 事件 → 状态 → 注入 全链路
 node tools/test-routes.mjs                                 # 路由：405 / 400 / 413 / 白名单 / preview
 node tools/test-tool.mjs                                   # cond_inject 工具：schema 契约与六个 action
+node tools/test-trace.mjs                                  # 最近注入记录：去重 / 截断 / 上限 / 副本
+node tools/test-stats.mjs                                  # 持久化统计：排序 / 去重 / 上限 / 落盘 / 损坏容错
 node ../../tools/test-client-render.mjs client.js          # 组件渲染（递归子组件）
 node ../../tools/test-locale.mjs client.js                 # 中英双语
 ```

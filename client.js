@@ -36,6 +36,11 @@ window.__ModuleLoader__.load({
         'rule.enabled': '启用',
         'rule.enabledDesc': '关闭后所有规则停止求值，设置仍保留',
         'rule.hits': '命中 {n} 次',
+        'rule.stats': '统计',
+        'rule.statsSession': '本会话 {n} 次',
+        'rule.statsTotal': '累计 {n} 次 / {s} 个会话',
+        'rule.statsLast': '最近 {t}',
+        'rule.statsNever': '尚未命中',
         'rule.edit': '编辑',
         'rule.done': '收起',
         'rule.remove': '删除',
@@ -92,6 +97,18 @@ window.__ModuleLoader__.load({
         'saved': '已保存',
         'saveFailed': '保存失败',
         'saveIncomplete': '规则「{name}」的条件还没填完（关键词或工具名），填好并移开光标后才会保存',
+        'trace.title': '最近注入',
+        'trace.desc': '对话里只在快照变化时才出现；这里记录每次命中的规则与原文（重启清空）。',
+        'trace.clear': '清空记录',
+        'trace.empty': '还没有注入记录',
+        'stats.title': '统计看板',
+        'stats.desc': '按命中次数排序；点卡片看明细（持久化，重启不丢）',
+        'stats.clear': '清空统计',
+        'stats.empty': '还没有命中记录',
+        'stats.cardHint': '点击查看命中明细',
+        'stats.detail': '「{name}」的命中明细',
+        'stats.detailMeta': '涉及 {n} 个会话 · 最近 {at}',
+        'stats.turn': '回合 {n}',
         'unsaved': '未保存',
         'preview.title': '试算',
         'preview.subtitle': '用假状态看哪些规则会命中，不写进对话',
@@ -123,6 +140,11 @@ window.__ModuleLoader__.load({
         'rule.enabled': 'Enabled',
         'rule.enabledDesc': 'Turning this off stops evaluation; rules are kept',
         'rule.hits': 'Hit {n} times',
+        'rule.stats': 'Stats',
+        'rule.statsSession': '{n} in this session',
+        'rule.statsTotal': '{n} total / {s} sessions',
+        'rule.statsLast': 'last {t}',
+        'rule.statsNever': 'never',
         'rule.edit': 'Edit',
         'rule.done': 'Collapse',
         'rule.remove': 'Delete',
@@ -179,6 +201,18 @@ window.__ModuleLoader__.load({
         'saved': 'Saved',
         'saveFailed': 'Save failed',
         'saveIncomplete': 'Rule "{name}" has an unfinished condition; fill it in and move focus away to save.',
+        'trace.title': 'Recent injections',
+        'trace.desc': 'Chat shows an injection only when the snapshot changes; this list keeps every hit (cleared on restart).',
+        'trace.clear': 'Clear',
+        'trace.empty': 'No injections yet',
+        'stats.title': 'Hit statistics',
+        'stats.desc': 'Sorted by hit count; click a card for details (persisted across restarts)',
+        'stats.clear': 'Clear stats',
+        'stats.empty': 'No hits recorded yet',
+        'stats.cardHint': 'Click to see hit details',
+        'stats.detail': 'Hits for "{name}"',
+        'stats.detailMeta': '{n} sessions · last {at}',
+        'stats.turn': 'turn {n}',
         'unsaved': 'Unsaved',
         'preview.title': 'Dry run',
         'preview.subtitle': 'Test with fake state — nothing is written to the conversation',
@@ -229,7 +263,11 @@ window.__ModuleLoader__.load({
       version: '',
       settings: { enabled: true, rules: [] },
       sessions: [],
-      hits: {},
+      currentSessionId: '',
+      hitsBySession: {},
+      hitStats: {},
+      trace: [],
+      stats: [],
     }
     const listeners = new Set()
     const emit = () => { for (const fn of listeners) fn(state) }
@@ -246,7 +284,11 @@ window.__ModuleLoader__.load({
           version: j.version || '',
           settings: j.settings || state.settings,
           sessions: Array.isArray(j.sessions) ? j.sessions : [],
-          hits: j.hits || {},
+          currentSessionId: typeof j.currentSessionId === 'string' ? j.currentSessionId : '',
+          hitsBySession: j.hitsBySession && typeof j.hitsBySession === 'object' ? j.hitsBySession : {},
+          hitStats: j.hitStats && typeof j.hitStats === 'object' ? j.hitStats : {},
+          trace: Array.isArray(j.trace) ? j.trace : [],
+          stats: Array.isArray(j.stats) ? j.stats : [],
         }
       } catch (e) {
         state = { ...state, loading: false, error: (e && e.message) || t('err.host') }
@@ -271,8 +313,19 @@ window.__ModuleLoader__.load({
       return j
     }
 
-    async function dryRun (payload) {
-      const r = await fetch(API + '/preview', {
+    /** 清空宿主侧「最近注入」记录（只影响内存，不动规则）。 */
+    async function clearTrace () {
+      await fetch(API + '/trace/clear', { method: 'POST' })
+      refresh()
+    }
+
+    /** 清空持久化统计（会写文件）。 */
+    async function clearStats () {
+      await fetch(API + '/stats/clear', { method: 'POST' })
+      refresh()
+    }
+
+    async function dryRun (payload) {      const r = await fetch(API + '/preview', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
@@ -531,6 +584,26 @@ window.__ModuleLoader__.load({
         fontFamily: 'inherit', fontSize: '13px',
       },
       addCondPlus: { fontSize: '16px', lineHeight: 1, fontWeight: 600, color: C.accent },
+      // 最近注入的一条记录：时间/规则名一行，原文一行
+      traceRow: { display: 'grid', gap: '4px' },
+      // 规则统计：一行几个数字，横排不够就换行
+      statsRow: { display: 'flex', gap: '16px', flexWrap: 'wrap' },
+      statItem: { fontSize: '12px', color: C.dim },
+      // 统计看板：卡片网格 + 展开的明细
+      statsGrid: { display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' },
+      statCard: (active) => ({
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '10px',
+        padding: '10px 12px', border: '1px solid ' + (active ? C.accent : C.border),
+        borderRadius: C.radiusSm, background: active ? C.surface : 'transparent',
+        cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+      }),
+      statName: {
+        fontSize: '13px', fontWeight: 600, minWidth: 0,
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      },
+      statCount: { fontSize: '17px', fontWeight: 700, color: C.accent, flex: 'none' },
+      statDetail: { display: 'grid', gap: '6px', marginTop: '10px', paddingLeft: '12px', borderLeft: '2px solid ' + C.border },
+      statEvent: { fontSize: '12px' },
     }
 
     // ═══ 4. 规则编辑 ═══════════════════════════════════════════════════
@@ -640,7 +713,7 @@ window.__ModuleLoader__.load({
     }
 
     /** 一条规则：折叠时是一张卡片的一行摘要，点头部展开编辑。 */
-    function RuleEditor ({ rule, onChange, onRemove, hits }) {
+    function RuleEditor ({ rule, onChange, onRemove, hits, stats }) {
       // 新建的空规则默认展开：用户点「新增规则」就是要立刻填内容
       const [open, setOpen] = useState(!rule.action.text)
       const [confirming, setConfirming] = useState(false)
@@ -821,6 +894,20 @@ window.__ModuleLoader__.load({
               ),
             ),
 
+            // 统计样板：本会话次数 / 累计 / 涉及会话数 / 最近命中时间
+            h('div', { style: S.field },
+              h('span', { style: S.groupLabel }, t('rule.stats')),
+              h('div', { style: S.statsRow },
+                h('span', { style: S.statItem }, t('rule.statsSession', { n: hits })),
+                h('span', { style: S.statItem },
+                  t('rule.statsTotal', { n: (stats && stats.total) || 0, s: (stats && stats.sessions) || 0 })),
+                h('span', { style: S.statItem },
+                  t('rule.statsLast', {
+                    t: stats && stats.lastAt ? new Date(stats.lastAt).toLocaleTimeString() : t('rule.statsNever'),
+                  })),
+              ),
+            ),
+
             h('div', { style: S.field },
               h('span', { style: S.groupLabel }, t('rule.limits')),
               h(Row, {
@@ -849,6 +936,58 @@ window.__ModuleLoader__.load({
     }
 
     // ═══ 5. 试算 ═══════════════════════════════════════════════════════
+    /**
+     * 统计看板：按命中次数降序的卡片（规则名 + 次数），点开看明细。
+     * 数据来自持久化统计（跨会话、跨重启），不是会话内存。
+     */
+    function StatsBoard ({ stats, onClear }) {
+      const [openId, setOpenId] = useState('')
+      const open = stats.find((item) => item.id === openId) || null
+      const shortSession = (id) => (typeof id === 'string' && id.length > 8 ? '…' + id.slice(-8) : (id || '—'))
+
+      return h('div', { style: S.field },
+        h('div', { style: S.condParams },
+          h('span', { style: S.groupLabel }, t('stats.title')),
+          h('span', { style: S.hint }, t('stats.desc')),
+          stats.length > 0 ? h('span', { style: S.toolbarSpacer }) : null,
+          stats.length > 0 ? h('button', { type: 'button', style: S.link, onClick: () => onClear() }, t('stats.clear')) : null,
+        ),
+        stats.length === 0
+          ? h('div', { style: S.hint }, t('stats.empty'))
+          : h('div', { style: S.statsGrid },
+            ...stats.map((item) => h('button', {
+              key: item.id,
+              type: 'button',
+              style: S.statCard(item.id === openId),
+              title: t('stats.cardHint'),
+              onClick: () => setOpenId(item.id === openId ? '' : item.id),
+            },
+              h('span', { style: S.statName }, item.name),
+              h('span', { style: S.statCount }, String(item.total)),
+            )),
+          ),
+        open
+          ? h('div', { style: S.statDetail },
+            h('div', { style: S.condParams },
+              h('span', { style: S.groupLabel }, t('stats.detail', { name: open.name })),
+              h('span', { style: S.hint }, t('stats.detailMeta', {
+                n: open.sessions,
+                at: open.lastAt ? new Date(open.lastAt).toLocaleString() : '—',
+              })),
+            ),
+            ...open.events.map((event, index) => h('div', { key: String(event.at) + '-' + index, style: S.statEvent },
+              h('span', { style: S.hint },
+                (event.at ? new Date(event.at).toLocaleString() : '—')
+                + ' · '
+                + shortSession(event.sessionId)
+                + ' · '
+                + t('stats.turn', { n: event.turn })),
+            )),
+          )
+          : null,
+      )
+    }
+
     /** 试算区：默认收起，展开后用一个两列表单，避免最后一个字段孤零零占一行。 */
     function PreviewPanel ({ rules }) {
       const [open, setOpen] = useState(false)
@@ -935,6 +1074,11 @@ window.__ModuleLoader__.load({
       }, [snap.settings.rules, draft])
 
       const rules = draft === null ? (snap.settings.rules || []) : draft
+      const trace = Array.isArray(snap.trace) ? snap.trace : []
+      // 「本会话」由宿主按最近活动给出；命中按会话分组后再取当前会话那一份
+      const currentSessionId = snap.currentSessionId || ''
+      const sessionCounts = (snap.hitsBySession && snap.hitsBySession[currentSessionId]) || {}
+      const sessionHits = (ruleId) => (ruleId && sessionCounts[ruleId]) || 0
 
       // 没有注入文本的规则不落盘：新建的卡要等用户填完才有意义。
       // 让空草稿进 /set 会被白名单丢弃，随后刷新的界面会把用户正在编辑的卡删掉。
@@ -1005,7 +1149,8 @@ window.__ModuleLoader__.load({
           : rules.map((rule, i) => h(RuleEditor, {
             key: rule.id || i,
             rule,
-            hits: snap.hits && rule.id ? snap.hits[rule.id] || 0 : 0,
+            hits: sessionHits(rule.id),
+            stats: snap.hitStats && rule.id ? snap.hitStats[rule.id] || null : null,
             onChange: (next, doSave) => {
               const nextRules = rules.map((r, j) => (j === i ? next : r))
               setDraft(nextRules)
@@ -1017,6 +1162,9 @@ window.__ModuleLoader__.load({
               persist(nextRules)
             },
           })),
+
+        // 统计看板：按命中次数排序，点卡片看明细
+        h(StatsBoard, { stats: snap.stats || [], onClear: clearStats }),
 
         // 新增规则：与「加条件」同一款虚线卡片。新建的空白卡不落盘，等填了注入文本再存
         h('button', {
@@ -1031,6 +1179,29 @@ window.__ModuleLoader__.load({
         ),
 
         h(PreviewPanel, { rules }),
+
+        // 最近注入：对话里只在快照变化时出现一次，这里补一份完整记录
+        h('div', { style: S.field },
+          h('div', { style: S.condParams },
+            h('span', { style: S.groupLabel }, t('trace.title')),
+            h('span', { style: S.hint }, t('trace.desc')),
+            trace.length > 0 ? h('span', { style: S.toolbarSpacer }) : null,
+            trace.length > 0
+              ? h('button', { type: 'button', style: S.link, onClick: () => clearTrace() }, t('trace.clear'))
+              : null,
+          ),
+          trace.length === 0
+            ? h('div', { style: S.hint }, t('trace.empty'))
+            : h('div', { style: S.condList },
+              ...trace.slice(0, 8).map((entry, i) => h('div', { key: String(entry.at) + '-' + i, style: S.traceRow },
+                h('span', { style: S.hint },
+                  new Date(entry.at).toLocaleTimeString()
+                  + ' · '
+                  + ((entry.rules || []).join('、') || '—')
+                  + (entry.hits > 1 ? ' ×' + entry.hits : '')),
+                h('div', { style: S.bodyText }, entry.text),
+              ))),
+        ),
 
         msg ? h('div', { style: S.msg(msg.bad) }, msg.text) : null,
       )

@@ -2,7 +2,7 @@
  * 配置契约的单一来源。可调值都能在 cordis.patch.yml 里覆盖，patch 层随升级保留。
  */
 
-export const VERSION = '0.1.0'
+export const VERSION = '0.1.1'
 
 /** 插件在路由、注入、日志里使用的统一前缀。 */
 export const PLUGIN_ID = 'dsh-conditional-rules'
@@ -49,6 +49,10 @@ export const MAX_TEXT_LENGTH = 2000
 
 /** 渲染后的注入内容上限，超出截断。 */
 export const MAX_RENDER_CHARS = 4000
+
+/** 最近注入记录：保留条数与单条文本上限（内存，重启清空）。 */
+export const TRACE_MAX_ENTRIES = 50
+export const TRACE_MAX_TEXT = 500
 
 /** 用户文本截断长度（模板变量 {{userText}}）。 */
 export const MAX_USER_TEXT = 200

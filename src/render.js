@@ -82,12 +82,14 @@ export function escapeBody (value) {
  * 也能归因到具体规则。外层还有框架加的 `<system-reminder>`，两层叠加。
  *
  * @param {Rule[]} matched 命中的规则
- * @param {object} state 会话状态
+ * @param {any} state 会话状态（宿主给的快照，边界未知）
  * @param {string} toolName 触发工具名（可选）
  * @returns {string} 空串表示本次不注入
  */
 export function renderRules (matched, state, toolName) {
   if (!Array.isArray(matched) || matched.length === 0) return ''
+  // 不加「每轮变化的标识」：快照是整段比较、整段发送，任何一条变化都会让宿主的
+  // 固定条目（工作目录 / 沙箱策略等）跟着重复一遍。可见性交给 trace，不靠改文本。
   const blocks = []
   for (const rule of matched) {
     const text = renderText(rule.action && rule.action.text, buildVars(state, rule, toolName)).trim()

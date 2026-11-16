@@ -8,7 +8,8 @@ import path from 'node:path'
 process.env.DSH_HOME = path.join(os.tmpdir(), 'dsh-cond-inject-test-' + Date.now())
 
 const { apply } = await import('../index.js')
-const { resetStates } = await import('../src/session-state.js')
+const { resetStates, hitCountsBySession, hitStats, lastActiveSessionId } = await import('../src/session-state.js')
+const { clear: clearTrace, list: listTrace } = await import('../src/trace.js')
 
 let passed = 0
 async function check (name, fn) {
@@ -477,6 +478,74 @@ async function run () {
     const { ctx, registered } = makeCtx()
     apply(ctx, { enabled: false, rules: [RULE] })
     assert.equal(registered.noticeContext.text(), '')
+  })
+
+  await check('命中后写入「最近注入」记录，同一步重复求值只累加命中数', () => {    resetStates()
+    clearTrace()
+    const { ctx, registered } = makeCtx()
+    // 用无条件规则：context 类条件在测试环境没有占用数据，不会命中
+    const always = {
+      id: 'r-trace',
+      name: '常驻',
+      enabled: true,
+      scope: { type: 'global' },
+      match: 'all',
+      conditions: [],
+      action: { text: '常驻内容', once: false, cooldownTurns: 0 },
+    }
+    apply(ctx, { enabled: true, rules: [always] })
+    const text = registered.injectContext.text(assemble('s-trace'))
+    const entries = listTrace()
+    assert.equal(entries.length, 1, '应记录一条')
+    assert.equal(entries[0].sessionId, 's-trace')
+    assert.deepEqual(entries[0].rules, ['常驻'])
+    assert.equal(entries[0].text, text, '记录的应就是注入原文')
+    // 同一步再求值一次：不新增条目，只累加
+    registered.injectContext.text(assemble('s-trace'))
+    assert.equal(listTrace().length, 1)
+    assert.equal(listTrace()[0].hits, 2)
+  })
+
+  await check('多会话命中：按会话分组、聚合统计、当前会话按最近活动', async () => {
+    resetStates()
+    const { ctx, registered } = makeCtx()
+    const always = {
+      id: 'r-multi', name: '常驻', enabled: true, scope: { type: 'global' }, match: 'all',
+      conditions: [], action: { text: '内容', once: false, cooldownTurns: 0 },
+    }
+    apply(ctx, { enabled: true, rules: [always] })
+    registered.injectContext.text(assemble('s-a'))
+    await new Promise((resolve) => setTimeout(resolve, 3))
+    registered.injectContext.text(assemble('s-b'))
+
+    const bySession = hitCountsBySession()
+    assert.deepEqual(Object.keys(bySession).sort(), ['s-a', 's-b'])
+    assert.equal(bySession['s-a']['r-multi'], 1)
+    assert.equal(bySession['s-b']['r-multi'], 1)
+
+    const stats = hitStats()['r-multi']
+    assert.equal(stats.total, 2, '跨会话累计')
+    assert.equal(stats.sessions, 2, '涉及 2 个会话')
+    assert.ok(stats.lastAt > 0, '应有最近命中时间')
+
+    assert.equal(lastActiveSessionId(), 's-b', '当前会话应按最近活动取，而不是插入顺序')
+  })
+
+  await check('/state 带当前会话、分组命中与聚合统计', async () => {
+    resetStates()
+    const { ctx, registered } = makeCtx()
+    apply(ctx, { enabled: true, rules: [RULE] })
+    const stateRoute = registered.routes.find((route) => route.path.endsWith('/state'))
+    assert.ok(stateRoute, '未注册 /state')
+    const out = { status: null, body: '' }
+    const res = { headersSent: false, writeHead (s) { out.status = s; this.headersSent = true }, end (c) { if (c) out.body += c } }
+    await stateRoute.handler({ method: 'GET' }, res)
+    assert.equal(out.status, 200)
+    const body = JSON.parse(out.body)
+    assert.ok(Array.isArray(body.trace), 'state 应带 trace')
+    assert.ok(typeof body.currentSessionId === 'string', 'state 应带 currentSessionId')
+    assert.ok(body.hitsBySession && typeof body.hitsBySession === 'object', 'state 应带 hitsBySession')
+    assert.ok(body.hitStats && typeof body.hitStats === 'object', 'state 应带 hitStats')
   })
 
   console.log(`\n${passed} 项集成断言通过`)

@@ -21,9 +21,12 @@ import { renderRules } from './src/render.js'
 import { createRoutes } from './src/routes.js'
 import { loadSettings, resolveOptions, saveSettings, settingsPath } from './src/rules.js'
 import {
-  allStates, hitCounts, noteHit, notePreStep, noteSessionEvent, noteTool, sessionIdOf, stateOf,
+  allStates, hitCountsBySession, hitStats, lastActiveSessionId,
+  noteHit, notePreStep, noteSessionEvent, noteTool, sessionIdOf, stateOf,
 } from './src/session-state.js'
+import { flushStats, loadStats, recordHit, snapshot as statsSnapshot } from './src/stats.js'
 import { createToolDefinition } from './src/tool.js'
+import { record as recordTrace } from './src/trace.js'
 
 export const name = 'dsh-conditional-rules'
 
@@ -50,6 +53,8 @@ export function apply (ctx, config) {
   const log = ctx.logger('conditional-inject')
   let settings = loadSettings(log, resolveOptions(config))
   if (!settings.enabled) log.info('条件规则已在设置中关闭，设置页仍可用')
+  // 统计是持久化的：启动时读入，命中时更新（节流落盘），卸载时 flush
+  loadStats(log)
 
   const getSettings = () => settings
   const setSettings = (next) => { settings = next }
@@ -134,7 +139,12 @@ export function apply (ctx, config) {
           if (matched.length === 0) return ''
           // 幂等登记：同回合内多次 assemble 结果恒定，跨回合才由 once/cooldown 抑制
           noteHit(sessionId, matched)
-          return renderRules(matched, state, state.toolName)
+          // 持久化统计：同规则同回合只记一次（内部去重），跨会话累计
+          recordHit(sessionId, matched, state.turn)
+          const rendered = renderRules(matched, state, state.toolName)
+          // 另记一份到本地 trace：对话里只在快照文本变化时才追加，恒定内容看不到重复
+          recordTrace({ sessionId, rules: matched, text: rendered })
+          return rendered
         } catch (error) {
           log.warn(`context render failed: ${error instanceof Error ? error.message : String(error)}`)
           return ''
@@ -195,14 +205,19 @@ export function apply (ctx, config) {
           persist: (next) => saveSettings(log, next),
           sessionSummary: () => {
             const states = allStates()
-            const sessionId = states.length > 0 ? states[states.length - 1].sessionId : ''
             return {
               sessions: states.map((state) => ({
                 sessionId: state.sessionId,
                 turn: state.turn,
                 percent: typeof state.percent === 'number' ? Number(state.percent.toFixed(1)) : null,
               })),
-              hits: sessionId ? hitCounts(sessionId) : {},
+              // 「当前会话」按最近活动挑，不能靠 Map 插入顺序（多会话时会张冠李戴）
+              currentSessionId: lastActiveSessionId(),
+              // 命中按会话分组，另给跨会话聚合
+              hitsBySession: hitCountsBySession(),
+              hitStats: hitStats(),
+              // 持久化看板数据（按命中次数降序）
+              stats: statsSnapshot(),
             }
           },
           log,
@@ -240,6 +255,9 @@ export function apply (ctx, config) {
       })
     })
   }
+
+  // 卸载 / 热重载前把统计里未落盘的改动写掉
+  ctx.effect(() => () => flushStats(), 'conditional-inject-stats-flush')
 
   log.info(`ready v${VERSION} (settings=${settingsPath()}, rules=${settings.rules.length})`)
 }

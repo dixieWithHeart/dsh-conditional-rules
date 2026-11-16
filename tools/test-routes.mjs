@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 
 import { createRoutes } from '../src/routes.js'
+import { clear as clearTrace, list as listTrace, record as recordTrace } from '../src/trace.js'
 
 let passed = 0
 async function check (name, fn) {
@@ -61,9 +62,9 @@ function harness (settings) {
 const find = (byPath, suffix) => [...byPath.entries()].find(([path]) => path.endsWith(suffix))[1]
 
 async function run () {
-  await check('声明了三条路由且 path 带前缀', () => {
+  await check('声明了五条路由且 path 带前缀', () => {
     const { routes } = harness()
-    assert.equal(routes.length, 3)
+    assert.equal(routes.length, 5)
     for (const route of routes) {
       assert.ok(route.path.startsWith('/api/dsh-conditional-rules/'), route.path)
       assert.equal(route.kind, 'exact')
@@ -183,6 +184,52 @@ async function run () {
     const { byPath } = harness()
     const r = res()
     await find(byPath, '/preview').handler(req('GET'), r)
+    assert.equal(r.out.status, 405)
+  })
+
+  await check('GET /state 带最近注入记录', async () => {
+    clearTrace()
+    recordTrace({ sessionId: 's1', rules: [{ name: '部署' }], text: '注入内容' })
+    const { byPath } = harness()
+    const r = res()
+    await find(byPath, '/state').handler(req('GET'), r)
+    assert.equal(r.out.status, 200)
+    const body = JSON.parse(r.out.body)
+    assert.ok(Array.isArray(body.trace), 'state 应带 trace 数组')
+    assert.equal(body.trace.length, 1)
+    assert.equal(body.trace[0].text, '注入内容')
+  })
+
+  await check('POST /trace/clear 清空记录', async () => {
+    clearTrace()
+    recordTrace({ sessionId: 's1', rules: [{ name: '部署' }], text: '注入内容' })
+    const { byPath } = harness()
+    const r = res()
+    await find(byPath, '/trace/clear').handler(req('POST'), r)
+    assert.equal(r.out.status, 200)
+    assert.deepEqual(JSON.parse(r.out.body).trace, [])
+    assert.equal(listTrace().length, 0)
+  })
+
+  await check('GET /trace/clear 返回 405', async () => {
+    const { byPath } = harness()
+    const r = res()
+    await find(byPath, '/trace/clear').handler(req('GET'), r)
+    assert.equal(r.out.status, 405)
+  })
+
+  await check('POST /stats/clear 清空统计并返回 200', async () => {
+    const { byPath } = harness()
+    const r = res()
+    await find(byPath, '/stats/clear').handler(req('POST'), r)
+    assert.equal(r.out.status, 200)
+    assert.deepEqual(JSON.parse(r.out.body).stats, [])
+  })
+
+  await check('GET /stats/clear 返回 405', async () => {
+    const { byPath } = harness()
+    const r = res()
+    await find(byPath, '/stats/clear').handler(req('GET'), r)
     assert.equal(r.out.status, 405)
   })
 

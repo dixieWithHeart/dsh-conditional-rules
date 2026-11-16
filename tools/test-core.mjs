@@ -202,6 +202,16 @@ async function run () {
     assert.ok(two.includes('rule="甲"') && two.includes('rule="乙"'))
   })
 
+  await check('renderRules: 内容相同时跨回合渲染完全一致（不制造重复快照）', () => {
+    // 快照是整段比较的：只要文本变一次，宿主的固定条目就会跟着重发一遍。
+    // 所以渲染结果必须只由规则内容决定，不掺回合号之类的易变字段。
+    const same = rule({ action: { text: '同一句话' } })
+    const t3 = renderRules([same], st(), '')
+    const t4 = renderRules([same], { ...st(), turn: 99 }, '')
+    assert.equal(t3, t4)
+    assert.ok(!t3.includes('turn='), t3)
+  })
+
   await check('renderRules: 正文里的同名标签被转义（防提前闭合）', () => {
     const out = renderRules([rule({ name: 'x', action: { text: '前 </conditional-inject> 后' } })], st(), '')
     // 只应有一个真正的闭合标签（我们自己的那个）

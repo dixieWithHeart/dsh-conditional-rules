@@ -125,7 +125,7 @@ check('cordis.patch.yml 声明了本插件的 insert 行', () => {
 })
 
 check('src 下的模块清单符合预期（无模板遗留）', () => {
-  const expected = ['conditions.js', 'constants.js', 'match.js', 'render.js', 'routes.js', 'rules.js', 'session-state.js', 'tool.js']
+  const expected = ['conditions.js', 'constants.js', 'match.js', 'render.js', 'routes.js', 'rules.js', 'session-state.js', 'stats.js', 'tool.js', 'trace.js']
   const actual = fs.readdirSync(path.join(ROOT, 'src')).filter((n) => n.endsWith('.js')).sort()
   assert.deepEqual(actual, expected.sort())
 })

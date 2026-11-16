@@ -57,3 +57,20 @@ export interface Logger {
   info: (...args: unknown[]) => void
   warn: (...args: unknown[]) => void
 }
+
+/** 一次命中的明细（持久化统计里按规则保存最近 N 条）。 */
+export interface StatsEvent {
+  at: number
+  sessionId: string
+  turn: number
+}
+
+/** 看板上的一个条目（按命中次数降序返回）。 */
+export interface StatsEntry {
+  id: string
+  name: string
+  total: number
+  sessions: number
+  lastAt: number
+  events: StatsEvent[]
+}

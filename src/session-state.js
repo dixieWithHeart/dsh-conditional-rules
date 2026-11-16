@@ -30,6 +30,8 @@ function blank (sessionId) {
     toolHits: new Set(),
     toolName: '',
     injected: new Map(),
+    // 最近一次活动的时间（用于挑「当前会话」，不能靠 Map 插入顺序）
+    lastSeen: 0,
     // 本回合是否已由 turn/start 事件给出权威回合号（避免与 pre-step 的兜底递增重复计数）
     turnSynced: false,
   }
@@ -76,6 +78,7 @@ export function sessionIdOf (assembleContext) {
  */
 export function notePreStep (sessionId, { step, userText, cwd }) {
   const state = stateOf(sessionId)
+  state.lastSeen = Date.now()
   if (typeof step === 'number' && step > 0) {
     if (step === 1) {
       // 新回合：上一回合的工具标记作废（工具条件只在命中后的下一步生效）
@@ -101,10 +104,16 @@ export function noteHit (sessionId, rules) {
   const state = peekState(sessionId)
   if (!state || !Array.isArray(rules)) return
   const turn = state.turn || 0
+  const now = Date.now()
+  state.lastSeen = now
   for (const rule of rules) {
     const entry = state.injected.get(rule.id)
     if (entry && entry.lastTurn === turn) continue
-    state.injected.set(rule.id, { count: (entry ? entry.count : 0) + 1, lastTurn: turn })
+    state.injected.set(rule.id, {
+      count: (entry ? entry.count : 0) + 1,
+      lastTurn: turn,
+      lastAt: now,
+    })
   }
 }
 
@@ -169,6 +178,57 @@ export function hitCounts (sessionId) {
   const out = {}
   for (const [id, entry] of state.injected) out[id] = entry.count
   return out
+}
+
+/**
+ * 按会话分组的命中次数。
+ *
+ * 修复点：旧实现只暴露「Map 插入顺序最后一个会话」的计数，多会话时会张冠李戴。
+ * 这里返回全部会话，由调用方挑「当前会话」或做汇总。
+ */
+export function hitCountsBySession () {
+  const out = {}
+  for (const [sessionId, state] of sessions) {
+    if (!sessionId) continue
+    const counts = {}
+    for (const [id, entry] of state.injected) counts[id] = entry.count
+    if (Object.keys(counts).length > 0) out[sessionId] = counts
+  }
+  return out
+}
+
+/**
+ * 跨会话聚合：每条规则的累计命中、涉及会话数、最近一次命中时间与回合。
+ * 统计随会话淘汰一起丢失（会话缓存上限 64），属于内存态的已知边界。
+ */
+export function hitStats () {
+  const out = {}
+  for (const state of sessions.values()) {
+    for (const [id, entry] of state.injected) {
+      const item = out[id] || { total: 0, sessions: 0, lastAt: 0, lastTurn: 0 }
+      item.total += entry.count
+      item.sessions += 1
+      if ((entry.lastAt || 0) > item.lastAt) item.lastAt = entry.lastAt || 0
+      if ((entry.lastTurn || 0) > item.lastTurn) item.lastTurn = entry.lastTurn || 0
+      out[id] = item
+    }
+  }
+  return out
+}
+
+/** 最近活跃的会话 id（按 lastSeen，而不是 Map 插入顺序）。 */
+export function lastActiveSessionId () {
+  let best = ''
+  let bestSeen = -1
+  for (const [sessionId, state] of sessions) {
+    if (!sessionId) continue
+    const seen = state.lastSeen || 0
+    if (seen > bestSeen) {
+      bestSeen = seen
+      best = sessionId
+    }
+  }
+  return best
 }
 
 /** 仅供测试：清空全部缓存。 */

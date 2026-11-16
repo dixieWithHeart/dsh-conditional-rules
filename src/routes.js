@@ -9,6 +9,8 @@
  */
 
 import { MAX_BODY_BYTES, ROUTE_PREFIX, VERSION } from './constants.js'
+import { clearStats } from './stats.js'
+import { clear as clearTrace, list as listTrace } from './trace.js'
 import { toolKey } from './conditions.js'
 import { matchRules } from './match.js'
 import { renderRules } from './render.js'
@@ -78,6 +80,7 @@ export function createRoutes ({ getSettings, setSettings, persist, sessionSummar
         res.end(JSON.stringify({
           version: VERSION,
           settings: getSettings(),
+          trace: listTrace(),
           ...summary(),
         }))
       },
@@ -141,6 +144,26 @@ export function createRoutes ({ getSettings, setSettings, persist, sessionSummar
           matched: matched.map((r) => r.id),
           text: renderRules(matched, state, state.toolName),
         }))
+      },
+    },
+    {
+      kind: 'exact',
+      path: `${ROUTE_PREFIX}/trace/clear`,
+      handler: async (req, res) => {
+        if (req.method !== 'POST') { res.writeHead(405); res.end(); return }
+        clearTrace()
+        res.writeHead(200, JSON_HEADERS)
+        res.end(JSON.stringify({ ok: true, trace: [] }))
+      },
+    },
+    {
+      kind: 'exact',
+      path: `${ROUTE_PREFIX}/stats/clear`,
+      handler: async (req, res) => {
+        if (req.method !== 'POST') { res.writeHead(405); res.end(); return }
+        clearStats()
+        res.writeHead(200, JSON_HEADERS)
+        res.end(JSON.stringify({ ok: true, stats: [] }))
       },
     },
   ]
