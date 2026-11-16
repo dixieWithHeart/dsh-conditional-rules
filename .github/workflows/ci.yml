@@ -1,0 +1,26 @@
+# 插件仓库的独立门禁：只跑仓库内自带的测试（不依赖 myDSH 项目里的工具）。
+# 项目级检查（渲染 / 双语 / 发布就绪 / 基座一致）在 myDSH 主仓库的 CI 里跑。
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 插件自带测试
+        run: |
+          for f in tools/smoke-test.mjs tools/test-core.mjs tools/test-integration.mjs tools/test-routes.mjs tools/test-tool.mjs; do
+            echo "== $f"
+            node "$f"
+          done
