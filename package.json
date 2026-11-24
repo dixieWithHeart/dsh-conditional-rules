@@ -1,6 +1,6 @@
 {
   "name": "dsh-conditional-rules",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "description": "条件规则：在满足条件时把自定义内容注入对话（上下文占用 / 用户关键词 / 回合数 / 工具调用），支持多条件组合与设置页试算。",
   "exports": {

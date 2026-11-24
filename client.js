@@ -346,7 +346,7 @@ window.__ModuleLoader__.load({
     }
 
     // ═══ 3. 样式（通用键来自共享基座，本插件只加特有键）═════════════════
-    // @ui-kit v1.3.0  共享 UI 基座（源：plugins/_shared/ui-kit.js；改源后重新复制本段）
+    // @ui-kit v1.4.3  共享 UI 基座（源：plugins/_shared/ui-kit.js；改源后重新复制本段）
     // ═════════════════════════════ [C] 颜色 token ═════════════════════════
     const C = {
       border: 'var(--dsw-alias-border-subtle, rgba(130,130,140,0.28))',
@@ -435,6 +435,42 @@ window.__ModuleLoader__.load({
       sliderValue: { fontSize: '13px', fontWeight: 600, fontFamily: C.mono },
     }
 
+    // ═════════════════════════ [P] 页面骨架样式 ═════════════════════════
+    // 页面骨架（Page / Card / Section / Footer）用 P，不并入插件的 S。
+    // 插件无法通过覆盖 S 改变页面层级，六个插件的设置页因此保持同构。
+    const P = {
+      page: { display: 'grid', gap: '14px', color: C.text },
+      head: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' },
+      title: { fontSize: '16px', fontWeight: 600, margin: 0, lineHeight: 1.3 },
+      meta: { fontSize: '12px', color: C.dim },
+      headRight: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' },
+      badge: { fontSize: '12px', color: C.dim, border: '1px solid ' + C.border, borderRadius: '999px', padding: '1px 8px' },
+      card: {
+        border: '1px solid ' + C.border, borderRadius: C.radius, padding: '16px 18px',
+        display: 'grid', gap: '12px',
+      },
+      cardHead: { display: 'grid', gap: '3px' },
+      cardTitleRow: { display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' },
+      cardTitle: { fontSize: '15px', fontWeight: 600, margin: 0 },
+      cardAction: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
+      cardDesc: { margin: 0, fontSize: '12px', lineHeight: 1.6, color: C.dim },
+      section: { borderTop: '1px solid ' + C.border, paddingTop: '10px', display: 'grid', gap: '10px' },
+      sectionHead: {
+        display: 'flex', alignItems: 'baseline', gap: '8px', width: '100%',
+        background: 'transparent', border: 0, padding: 0, cursor: 'pointer',
+        color: C.text, textAlign: 'left',
+      },
+      sectionTitle: { fontSize: '13px', fontWeight: 600 },
+      sectionHint: { fontSize: '12px', color: C.dim, flex: '1 1 auto', minWidth: 0 },
+      sectionChevron: { fontSize: '12px', color: C.dim, flex: 'none' },
+      sectionBody: { display: 'grid', gap: '10px' },
+      footer: { fontSize: '12px', color: C.dim, lineHeight: 1.6, margin: 0 },
+      ok: { fontSize: '12px', color: C.ok },
+      bad: { fontSize: '12px', color: C.danger },
+      note: { fontSize: '12px', color: C.dim },
+      empty: { fontSize: '12.5px', color: C.dim, fontStyle: 'italic' },
+    }
+
     // ═════════════════════════ [组件] 通用控件 ═════════════════════════
     /** 开关按钮。 */
     function Toggle ({ on, label, onChange }) {
@@ -501,6 +537,78 @@ window.__ModuleLoader__.load({
         h('div', { style: S.statValue }, value),
         h('div', { style: S.statKey }, label),
       )
+    }
+
+    /** 设置页骨架：页头（标题 / 版本 / 自定义徽章 / 状态 / 开关）+ 可选说明 + 内容 + 脚注。 */
+    function Page ({ title, version, badge, status, toggle, desc, children, footer }) {
+      return h('div', { style: P.page },
+        h('div', { style: P.head },
+          h('h3', { style: P.title }, title),
+          version ? h('span', { style: P.badge }, 'v' + version) : null,
+          badge ? h('span', { style: P.badge }, badge) : null,
+          h('div', { style: P.headRight },
+            status ? h('span', { style: P.meta }, status) : null,
+            toggle || null,
+          ),
+        ),
+        desc ? h('p', { style: P.meta }, desc) : null,
+        children,
+        footer ? h('p', { style: P.footer }, footer) : null,
+      )
+    }
+
+    /** 内容卡片：标题 + 可选说明 + 标题行右侧操作 + 内容。 */
+    function Card ({ title, desc, status, action, children }) {
+      return h('section', { style: P.card },
+        (title || desc || status || action) ? h('div', { style: P.cardHead },
+          (title || status || action) ? h('div', { style: P.cardTitleRow },
+            title ? h('h4', { style: P.cardTitle }, title) : null,
+            status ? h('span', { style: P.meta }, status) : null,
+            action ? h('span', { style: P.cardAction }, action) : null,
+          ) : null,
+          desc ? h('p', { style: P.cardDesc }, desc) : null,
+        ) : null,
+        children,
+      )
+    }
+
+    /** 可折叠分组：标题行 + 折叠内容（收起时保留 DOM，只用 display 隐藏）。 */
+    function Section ({ title, hint, open, onToggle, children }) {
+      return h('section', { style: P.section },
+        h('button', {
+          type: 'button',
+          style: P.sectionHead,
+          'aria-expanded': open ? 'true' : 'false',
+          onClick: onToggle,
+        },
+          h('span', { style: P.sectionTitle }, title),
+          hint ? h('span', { style: P.sectionHint }, hint) : null,
+          h('span', { style: P.sectionChevron }, open ? '▾' : '▸'),
+        ),
+        h('div', { style: open ? P.sectionBody : { ...P.sectionBody, display: 'none' } }, children),
+      )
+    }
+
+    /** 纵向堆叠。 */
+    function Stack ({ gap, children }) {
+      return h('div', { style: { display: 'grid', gap: gap || '10px' } }, children)
+    }
+
+    /** 横向排列，空间不足时换行。 */
+    function Inline ({ gap, children }) {
+      return h('div', { style: { display: 'flex', alignItems: 'center', gap: gap || '8px', flexWrap: 'wrap' } }, children)
+    }
+
+    /** 保存状态行：saving / saved / error；text 为空时不渲染。 */
+    function StatusLine ({ state, text }) {
+      if (!text) return null
+      const style = state === 'error' ? P.bad : state === 'saved' ? P.ok : P.note
+      return h('div', { style, role: state === 'error' ? 'alert' : 'status' }, text)
+    }
+
+    /** 脚注：存储路径、数据来源等。 */
+    function Footer ({ children }) {
+      return h('p', { style: P.footer }, children)
     }
 
     /** 互斥选项组（药丸按钮）。options 为 `[[value, label], ...]`。 */
@@ -945,47 +1053,48 @@ window.__ModuleLoader__.load({
       const open = stats.find((item) => item.id === openId) || null
       const shortSession = (id) => (typeof id === 'string' && id.length > 8 ? '…' + id.slice(-8) : (id || '—'))
 
-      return h('div', { style: S.field },
-        h('div', { style: S.condParams },
-          h('span', { style: S.groupLabel }, t('stats.title')),
-          h('span', { style: S.hint }, t('stats.desc')),
-          stats.length > 0 ? h('span', { style: S.toolbarSpacer }) : null,
-          stats.length > 0 ? h('button', { type: 'button', style: S.link, onClick: () => onClear() }, t('stats.clear')) : null,
-        ),
-        stats.length === 0
-          ? h('div', { style: S.hint }, t('stats.empty'))
-          : h('div', { style: S.statsGrid },
-            ...stats.map((item) => h('button', {
-              key: item.id,
-              type: 'button',
-              style: S.statCard(item.id === openId),
-              title: t('stats.cardHint'),
-              onClick: () => setOpenId(item.id === openId ? '' : item.id),
-            },
-              h('span', { style: S.statName }, item.name),
-              h('span', { style: S.statCount }, String(item.total)),
-            )),
-          ),
-        open
-          ? h('div', { style: S.statDetail },
-            h('div', { style: S.condParams },
-              h('span', { style: S.groupLabel }, t('stats.detail', { name: open.name })),
-              h('span', { style: S.hint }, t('stats.detailMeta', {
-                n: open.sessions,
-                at: open.lastAt ? new Date(open.lastAt).toLocaleString() : '—',
-              })),
-            ),
-            ...open.events.map((event, index) => h('div', { key: String(event.at) + '-' + index, style: S.statEvent },
-              h('span', { style: S.hint },
-                (event.at ? new Date(event.at).toLocaleString() : '—')
-                + ' · '
-                + shortSession(event.sessionId)
-                + ' · '
-                + t('stats.turn', { n: event.turn })),
-            )),
-          )
+      return h(Card, {
+        title: t('stats.title'),
+        desc: t('stats.desc'),
+        action: stats.length > 0
+          ? h('button', { type: 'button', style: S.link, onClick: () => onClear() }, t('stats.clear'))
           : null,
-      )
+        children: [
+          stats.length === 0
+            ? h('div', { style: S.hint }, t('stats.empty'))
+            : h('div', { style: S.statsGrid },
+              ...stats.map((item) => h('button', {
+                key: item.id,
+                type: 'button',
+                style: S.statCard(item.id === openId),
+                title: t('stats.cardHint'),
+                onClick: () => setOpenId(item.id === openId ? '' : item.id),
+              },
+                h('span', { style: S.statName }, item.name),
+                h('span', { style: S.statCount }, String(item.total)),
+              )),
+            ),
+          open
+            ? h('div', { style: S.statDetail },
+              h('div', { style: S.condParams },
+                h('span', { style: S.groupLabel }, t('stats.detail', { name: open.name })),
+                h('span', { style: S.hint }, t('stats.detailMeta', {
+                  n: open.sessions,
+                  at: open.lastAt ? new Date(open.lastAt).toLocaleString() : '—',
+                })),
+              ),
+              ...open.events.map((event, index) => h('div', { key: String(event.at) + '-' + index, style: S.statEvent },
+                h('span', { style: S.hint },
+                  (event.at ? new Date(event.at).toLocaleString() : '—')
+                  + ' · '
+                  + shortSession(event.sessionId)
+                  + ' · '
+                  + t('stats.turn', { n: event.turn })),
+              )),
+            )
+            : null,
+        ],
+      })
     }
 
     /** 试算区：默认收起，展开后用一个两列表单，避免最后一个字段孤零零占一行。 */
@@ -1020,46 +1129,63 @@ window.__ModuleLoader__.load({
         }),
       )
 
-      const head = h('div', { style: S.ruleHead },
-        h('span', { style: S.groupLabel }, t('preview.title')),
-        h('span', { style: S.ruleMeta }, t('preview.subtitle')),
-        h('span', { style: S.toolbarSpacer }),
-        open
-          ? h('div', { style: S.condParams },
-            h('button', { type: 'button', style: S.link, disabled: busy, onClick: run },
-              busy ? t('preview.running') : t('preview.run')),
-            h('button', { type: 'button', style: S.link, onClick: () => setOpen(false) }, t('preview.collapse')),
-          )
-          : h('button', { type: 'button', style: S.link, onClick: () => setOpen(true) }, t('preview.expand')),
-      )
+      const action = open
+        ? h(Inline, { gap: '8px' },
+          h('button', { type: 'button', style: S.link, disabled: busy, onClick: run },
+            busy ? t('preview.running') : t('preview.run')),
+          h('button', { type: 'button', style: S.link, onClick: () => setOpen(false) }, t('preview.collapse')),
+        )
+        : h('button', { type: 'button', style: S.link, onClick: () => setOpen(true) }, t('preview.expand'))
 
-      if (!open) return h('div', { style: S.ruleCard }, head)
-
-      return h('div', { style: S.ruleCard },
-        head,
-        h('div', { style: S.previewGrid },
-          field('percent', t('preview.percent'), 'number'),
-          field('turn', t('preview.turn'), 'number'),
-          field('tool', t('preview.tool')),
-          field('userText', t('preview.userText'), 'text', true),
-        ),
-        err ? h('div', { style: S.msg(true) }, err) : null,
-        result
-          ? h('div', { style: S.field },
-            h('span', { style: S.label }, t('preview.output')),
-            h('span', { style: S.hint },
-              result.matched && result.matched.length > 0
-                ? t('preview.matched', { names: String(result.matched.length) })
-                : t('preview.none')),
-            result.text
-              ? h('div', { style: S.bodyText }, result.text)
+      return h(Card, {
+        title: t('preview.title'),
+        desc: t('preview.subtitle'),
+        action,
+        children: open
+          ? [
+            h('div', { style: S.previewGrid },
+              field('percent', t('preview.percent'), 'number'),
+              field('turn', t('preview.turn'), 'number'),
+              field('tool', t('preview.tool')),
+              field('userText', t('preview.userText'), 'text', true),
+            ),
+            err ? h(StatusLine, { state: 'error', text: err }) : null,
+            result
+              ? h('div', { style: S.field },
+                h('span', { style: S.label }, t('preview.output')),
+                h('span', { style: S.hint },
+                  result.matched && result.matched.length > 0
+                    ? t('preview.matched', { names: String(result.matched.length) })
+                    : t('preview.none')),
+                result.text
+                  ? h('div', { style: S.bodyText }, result.text)
+                  : null,
+              )
               : null,
-          )
+          ]
           : null,
-      )
+      })
     }
 
     // ═══ 6. 设置页 ═════════════════════════════════════════════════════
+    /** 设置页导航图标：条件汇聚到对话（跟随主题色）。 */
+    function SettingsIcon ({ size }) {
+      const px = Number(size) || 18
+      return h('svg', {
+        width: px, height: px, viewBox: '0 0 24 24', fill: 'none',
+        stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round',
+        'aria-hidden': 'true',
+      },
+        h('path', { d: 'M2.5 5h4.5' }),
+        h('path', { d: 'M2.5 12h4.5' }),
+        h('path', { d: 'M2.5 19h4.5' }),
+        h('path', { d: 'M7 5v14', opacity: 0.4 }),
+        h('path', { d: 'M9.5 12h6.5' }),
+        h('path', { d: 'M13.5 9.2 16.5 12l-3 2.8' }),
+        h('rect', { x: 17.2, y: 7.5, width: 4.3, height: 9, rx: 1.4 }),
+      )
+    }
+
     function SettingsPage () {
       const snap = useStore()
       const [draft, setDraft] = useState(null)
@@ -1124,87 +1250,87 @@ window.__ModuleLoader__.load({
         ? t('status.connecting')
         : snap.error ? t('status.unavailable') : (enabled ? t('status.on') : t('status.off'))
 
-      return h('div', { style: S.card },
-        h('div', { style: S.head },
-          h('h3', { style: S.title }, t('title')),
-          h('span', { style: S.badge }, 'v' + (snap.version || '—')),
-          h('span', { style: S.badge }, t('count.rules', { n: rules.length })),
-          h('span', { style: S.status }, statusText),
-        ),
-        h('p', { style: S.desc }, t('desc')),
+      return h(Page, {
+        title: t('title'),
+        version: snap.version || '—',
+        badge: t('count.rules', { n: rules.length }),
+        status: statusText,
+        desc: t('desc'),
+        children: [
+          msg ? h(StatusLine, { state: msg.bad ? 'error' : 'saved', text: msg.text }) : null,
 
-        // 总开关单独一行：它立即生效，和「保存规则」不是同一件事，不能混在一起
-        h(Row, {
-          title: t('rule.enabled'),
-          desc: t('rule.enabledDesc'),
-          control: h(Toggle, {
-            on: enabled,
-            label: t('rule.enabled'),
-            onChange: (v) => persist(undefined, v),
+          h(Card, {
+            children: [
+              // 总开关单独一行：它立即生效，和「保存规则」不是同一件事，不能混在一起
+              h(Row, {
+                title: t('rule.enabled'),
+                desc: t('rule.enabledDesc'),
+                control: h(Toggle, {
+                  on: enabled,
+                  label: t('rule.enabled'),
+                  onChange: (v) => persist(undefined, v),
+                }),
+              }),
+
+              rules.length === 0
+                ? h('div', { style: S.hint }, t('list.empty'))
+                : rules.map((rule, i) => h(RuleEditor, {
+                  key: rule.id || i,
+                  rule,
+                  hits: sessionHits(rule.id),
+                  stats: snap.hitStats && rule.id ? snap.hitStats[rule.id] || null : null,
+                  onChange: (next, doSave) => {
+                    const nextRules = rules.map((r, j) => (j === i ? next : r))
+                    setDraft(nextRules)
+                    if (doSave) persist(nextRules)
+                  },
+                  onRemove: () => {
+                    const nextRules = rules.filter((_, j) => j !== i)
+                    setDraft(nextRules)
+                    persist(nextRules)
+                  },
+                })),
+
+              // 新增规则：与「加条件」同一款虚线卡片。新建的空白卡不落盘，等填了注入文本再存
+              h('button', {
+                type: 'button',
+                style: S.addCondCard,
+                title: t('list.add'),
+                'aria-label': t('list.add'),
+                onClick: () => setDraft([...rules, blankRule(rules.length)]),
+              },
+                h('span', { style: S.addCondPlus, 'aria-hidden': 'true' }, '+'),
+                h('span', {}, t('list.add')),
+              ),
+            ],
           }),
-        }),
 
-        rules.length === 0
-          ? h('div', { style: S.hint }, t('list.empty'))
-          : rules.map((rule, i) => h(RuleEditor, {
-            key: rule.id || i,
-            rule,
-            hits: sessionHits(rule.id),
-            stats: snap.hitStats && rule.id ? snap.hitStats[rule.id] || null : null,
-            onChange: (next, doSave) => {
-              const nextRules = rules.map((r, j) => (j === i ? next : r))
-              setDraft(nextRules)
-              if (doSave) persist(nextRules)
-            },
-            onRemove: () => {
-              const nextRules = rules.filter((_, j) => j !== i)
-              setDraft(nextRules)
-              persist(nextRules)
-            },
-          })),
+          // 统计看板：按命中次数排序，点卡片看明细
+          h(StatsBoard, { stats: snap.stats || [], onClear: clearStats }),
 
-        // 统计看板：按命中次数排序，点卡片看明细
-        h(StatsBoard, { stats: snap.stats || [], onClear: clearStats }),
+          h(PreviewPanel, { rules }),
 
-        // 新增规则：与「加条件」同一款虚线卡片。新建的空白卡不落盘，等填了注入文本再存
-        h('button', {
-          type: 'button',
-          style: S.addCondCard,
-          title: t('list.add'),
-          'aria-label': t('list.add'),
-          onClick: () => setDraft([...rules, blankRule(rules.length)]),
-        },
-          h('span', { style: S.addCondPlus, 'aria-hidden': 'true' }, '+'),
-          h('span', {}, t('list.add')),
-        ),
-
-        h(PreviewPanel, { rules }),
-
-        // 最近注入：对话里只在快照变化时出现一次，这里补一份完整记录
-        h('div', { style: S.field },
-          h('div', { style: S.condParams },
-            h('span', { style: S.groupLabel }, t('trace.title')),
-            h('span', { style: S.hint }, t('trace.desc')),
-            trace.length > 0 ? h('span', { style: S.toolbarSpacer }) : null,
-            trace.length > 0
+          // 最近注入：对话里只在快照变化时出现一次，这里补一份完整记录
+          h(Card, {
+            title: t('trace.title'),
+            desc: t('trace.desc'),
+            action: trace.length > 0
               ? h('button', { type: 'button', style: S.link, onClick: () => clearTrace() }, t('trace.clear'))
               : null,
-          ),
-          trace.length === 0
-            ? h('div', { style: S.hint }, t('trace.empty'))
-            : h('div', { style: S.condList },
-              ...trace.slice(0, 8).map((entry, i) => h('div', { key: String(entry.at) + '-' + i, style: S.traceRow },
-                h('span', { style: S.hint },
-                  new Date(entry.at).toLocaleTimeString()
-                  + ' · '
-                  + ((entry.rules || []).join('、') || '—')
-                  + (entry.hits > 1 ? ' ×' + entry.hits : '')),
-                h('div', { style: S.bodyText }, entry.text),
-              ))),
-        ),
-
-        msg ? h('div', { style: S.msg(msg.bad) }, msg.text) : null,
-      )
+            children: trace.length === 0
+              ? h('div', { style: S.hint }, t('trace.empty'))
+              : h('div', { style: S.condList },
+                ...trace.slice(0, 8).map((entry, i) => h('div', { key: String(entry.at) + '-' + i, style: S.traceRow },
+                  h('span', { style: S.hint },
+                    new Date(entry.at).toLocaleTimeString()
+                    + ' · '
+                    + ((entry.rules || []).join('、') || '—')
+                    + (entry.hits > 1 ? ' ×' + entry.hits : '')),
+                  h('div', { style: S.bodyText }, entry.text),
+                ))),
+          }),
+        ],
+      })
     }
 
     // ═══ 7. 注册 ═══════════════════════════════════════════════════════
@@ -1256,6 +1382,17 @@ window.__ModuleLoader__.load({
           'settings.section'
         ),
         'cond-inject-settings-section'
+      )
+
+      ctx.effect(
+        () => contribute(
+          ctx,
+          'settings.section.icon',
+          { name: 'settings.section.icon', id: 'conditional-inject' },
+          SettingsIcon,
+          'settings.section.icon'
+        ),
+        'cond-inject-settings-icon'
       )
     }
 

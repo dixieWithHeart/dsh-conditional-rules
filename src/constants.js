@@ -2,7 +2,7 @@
  * 配置契约的单一来源。可调值都能在 cordis.patch.yml 里覆盖，patch 层随升级保留。
  */
 
-export const VERSION = '0.1.1'
+export const VERSION = '0.2.0'
 
 /** 插件在路由、注入、日志里使用的统一前缀。 */
 export const PLUGIN_ID = 'dsh-conditional-rules'
